@@ -91,7 +91,19 @@ def webhook():
     msg = data["message"]
     from_user = msg.get("from", {})
     text = msg.get("text", "")
+# -----------------------------
+# ЕСЛИ ЭТО /start — ТОЛЬКО ПРИВЕТСТВИЕ
+# -----------------------------
+if text == "/start":
+    welcome_text = (
+        "Здравствуйте!\n"
+        "Напишите ваш вопрос — менеджер ответит в ближайшее время.\n\n"
+        "Hello!\n"
+        "Please send your message and our manager will reply shortly."
+    )
 
+    send_to_user(from_user.get("id"), welcome_text)
+    return "ok"
     user_id = str(from_user.get("id"))
     username = from_user.get("username", "no_username")
 
@@ -120,10 +132,19 @@ def webhook():
     formatted = f"👤 @{username} [UID:{user_id}]\n{text}"
     send_to_admin(formatted)
 
-    # автоответ только один раз
-    if user_id not in SEEN_USERS:
-        send_to_user(user_id, WELCOME_TEXT)
-        SEEN_USERS.add(user_id)
+    # -----------------------------
+# ПЕРВОЕ РЕАЛЬНОЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ
+# -----------------------------
+if user_id not in SEEN_USERS:
+    auto_reply = (
+        "Сообщение получено.\n"
+        "Менеджер на связи и ответит в ближайшее время. Спасибо за ожидание.\n\n"
+        "Message received.\n"
+        "The manager will reply as soon as possible. Thank you for waiting."
+    )
+
+    send_to_user(user_id, auto_reply)
+    SEEN_USERS.add(user_id)
 
     # запускаем таймер ожидания
     if user_id not in ACTIVE_CHATS:
