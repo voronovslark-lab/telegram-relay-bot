@@ -14,15 +14,15 @@ ADMIN_ID = os.environ.get("ADMIN_ID")
 SEEN_USERS = set()
 
 WELCOME_TEXT = (
-    "Здравствуйте! Напишите ваш вопрос — менеджер ответит в ближайшее время.\n\n"
-    "Hello! Please send your question — the manager will reply shortly."
+    "Здравствуйте!\n"
+    "Напишите ваш вопрос — менеджер Аниса ответит в ближайшее время.\n\n"
+    "Hello!\n"
+    "Please send your message and our manager Anisa will reply shortly."
 )
 
 AUTO_REPLY_TEXT = (
-    "Сообщение получено. Менеджер на связи и ответит в ближайшее время.\n"
-    "Спасибо за ожидание.\n\n"
-    "Message received. The manager will reply as soon as possible.\n"
-    "Thank you for waiting."
+    "Сообщение получено. Менеджер на связи.\n\n"
+    "Message received. The manager is reviewing it."
 )
 
 FOLLOWUP_TEXT = (
@@ -64,7 +64,9 @@ def webhook():
     user_id = str(from_user.get("id"))
     username = from_user.get("username", "no_username")
 
-    # если пишет админ — пересылаем ответ пользователю
+    # -----------------------------
+    # ЕСЛИ ПИШЕТ АДМИН — ЭТО ОТВЕТ
+    # -----------------------------
     if user_id == str(ADMIN_ID):
         if "reply_to_message" in msg:
             original = msg["reply_to_message"].get("text", "")
@@ -73,21 +75,29 @@ def webhook():
                 send_to_user(target_id, text)
         return "ok"
 
-    # если человек нажал /start
+    # -----------------------------
+    # ЕСЛИ НАЖАЛИ /start
+    # -----------------------------
     if text == "/start":
         send_to_user(user_id, WELCOME_TEXT)
         return "ok"
 
-    # пересылаем сообщение админу
+    # -----------------------------
+    # ОБЫЧНОЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ
+    # -----------------------------
     formatted = f"👤 @{username} [UID:{user_id}]\n{text}"
     send_to_admin(formatted)
 
-    # автоответ только один раз
+    # автоответ только 1 раз
     if user_id not in SEEN_USERS:
         SEEN_USERS.add(user_id)
         send_to_user(user_id, AUTO_REPLY_TEXT)
 
-        threading.Thread(target=delayed_followup, args=(user_id,)).start()
+        threading.Thread(
+            target=delayed_followup,
+            args=(user_id,),
+            daemon=True
+        ).start()
 
     return "ok"
 
@@ -97,6 +107,6 @@ def home():
     return "Bot is running"
 
 
-if __name__ == "__main__":
+if name == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
