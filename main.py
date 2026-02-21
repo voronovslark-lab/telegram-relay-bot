@@ -7,7 +7,7 @@ app = Flask(__name__)
 BOT1_TOKEN = os.environ.get("BOT1_TOKEN")
 BOT2_TOKEN = os.environ.get("BOT2_TOKEN")
 ADMIN_ID = os.environ.get("ADMIN_ID")
-
+print("DEBUG ADMIN_ID =", ADMIN_ID)
 def send_to_admin(text):
     url = f"https://api.telegram.org/bot{BOT2_TOKEN}/sendMessage"
     data = {"chat_id": ADMIN_ID, "text": text}
