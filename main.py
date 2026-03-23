@@ -8,10 +8,7 @@ app = Flask(__name__)
 
 BOT1_TOKEN = os.environ.get("BOT1_TOKEN")  # клиент
 BOT2_TOKEN = os.environ.get("BOT2_TOKEN")  # админ
-ADMIN_ID = os.environ.get("ADMIN_ID")
-
-if ADMIN_ID:
-    ADMIN_ID = int(ADMIN_ID)
+ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 
 SEEN_USERS = set()
 
