@@ -6,101 +6,92 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
-BOT1_TOKEN = os.environ.get("BOT1_TOKEN")  # клиент
-BOT2_TOKEN = os.environ.get("BOT2_TOKEN")  # админ
-ADMIN_ID = int(os.environ.get("ADMIN_ID"))
+BOT1_TOKEN = os.environ.get("BOT1_TOKEN")
+BOT2_TOKEN = os.environ.get("BOT2_TOKEN")
+ADMIN_ID = os.environ.get("ADMIN_ID")
 
+# пользователи, которым уже отправляли автоответ
 SEEN_USERS = set()
 
 WELCOME_TEXT = (
     "Здравствуйте!\n"
-    "Напишите ваш вопрос — менеджер ответит в ближайшее время."
+    "Напишите ваш вопрос — менеджер Аниса ответит в ближайшее время.\n\n"
+    "Hello!\n"
+    "Please send your message and our manager Anisa will reply shortly."
 )
 
 AUTO_REPLY_TEXT = (
-    "Сообщение получено. Менеджер на связи."
+    "Сообщение получено. Менеджер на связи.\n\n"
+    "Message received. The manager is reviewing it."
 )
 
 FOLLOWUP_TEXT = (
-    "Менеджер скоро ответит. Спасибо за ожидание."
+    "Менеджер скоро ответит. Благодарим за терпение.\n\n"
+    "The manager will respond soon. Thank you for your patience."
 )
 
-# отправка текста
+
 def send_message(token, chat_id, text):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     requests.post(url, json={"chat_id": chat_id, "text": text})
 
-# копирование любого сообщения
-def copy_message(token, chat_id, from_chat_id, message_id):
-    url = f"https://api.telegram.org/bot{token}/copyMessage"
-    requests.post(url, json={
-        "chat_id": chat_id,
-        "from_chat_id": from_chat_id,
-        "message_id": message_id
-    })
 
-# пользователь → админ
-def forward_to_admin(from_chat_id, message_id):
-    url = f"https://api.telegram.org/bot{BOT2_TOKEN}/forwardMessage"
-    r = requests.post(url, json={
-        "chat_id": ADMIN_ID,
-        "from_chat_id": from_chat_id,
-        "message_id": message_id
-    })
-    print(r.text)
+def send_to_admin(text):
+    send_message(BOT2_TOKEN, ADMIN_ID, text)
+
+
+def send_to_user(user_id, text):
+    send_message(BOT1_TOKEN, user_id, text)
+
 
 def delayed_followup(user_id):
-    time.sleep(900)
+    time.sleep(900)  # 15 минут
     if user_id in SEEN_USERS:
-        send_message(BOT1_TOKEN, user_id, FOLLOWUP_TEXT)
+        send_to_user(user_id, FOLLOWUP_TEXT)
+
 
 @app.route("/", methods=["POST"])
 def webhook():
     data = request.json
-    msg = data.get("message")
 
-    if not msg:
+    if "message" not in data:
         return "ok"
 
-    chat_id = msg["chat"]["id"]
-    user_id = msg.get("from", {}).get("id")
+    msg = data["message"]
     text = msg.get("text", "")
+    from_user = msg.get("from", {})
 
-    # ЕСЛИ ПИШЕТ АДМИН
-    if user_id == ADMIN_ID:
+    user_id = str(from_user.get("id"))
+    username = from_user.get("username", "no_username")
 
+    # -----------------------------
+    # ЕСЛИ ПИШЕТ АДМИН — ЭТО ОТВЕТ
+    # -----------------------------
+    if user_id == str(ADMIN_ID):
         if "reply_to_message" in msg:
-            original = msg["reply_to_message"]
-
-            # основной вариант
-            if "forward_from" in original:
-                target_id = original["forward_from"]["id"]
-                copy_message(BOT1_TOKEN, target_id, chat_id, msg["message_id"])
-
-            # если пользователь скрыт — не сможем ответить
-            elif "forward_sender_name" in original:
-                print("Нельзя ответить: пользователь скрыт")
-
-            # если это был чат
-            elif "forward_from_chat" in original:
-                target_id = original["forward_from_chat"]["id"]
-                copy_message(BOT1_TOKEN, target_id, chat_id, msg["message_id"])
-
+            original = msg["reply_to_message"].get("text", "")
+            if "[UID:" in original:
+                target_id = original.split("[UID:")[1].split("]")[0]
+                send_to_user(target_id, text)
         return "ok"
 
-    # пользователь → админ
-    forward_to_admin(chat_id, msg["message_id"])
-
-    # /start
+    # -----------------------------
+    # ЕСЛИ НАЖАЛИ /start
+    # -----------------------------
     if text == "/start":
-        send_message(BOT1_TOKEN, user_id, WELCOME_TEXT)
+        send_to_user(user_id, WELCOME_TEXT)
         return "ok"
 
-    # автоответ
+    # -----------------------------
+    # ОБЫЧНОЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ
+    # -----------------------------
+    formatted = f"👤 @{username} [UID:{user_id}]\n{text}"
+    send_to_admin(formatted)
+
+    # автоответ только 1 раз
     if user_id not in SEEN_USERS:
         SEEN_USERS.add(user_id)
-
-        send_message(BOT1_TOKEN, user_id, AUTO_REPLY_TEXT)
+        send_to_user(user_id, AUTO_REPLY_TEXT)
 
         threading.Thread(
             target=delayed_followup,
@@ -110,10 +101,12 @@ def webhook():
 
     return "ok"
 
+
 @app.route("/", methods=["GET"])
 def home():
-    return "ok"
+    return "Bot is running"
 
-if __name__ == "__main__":
+
+if name == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
