@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 BOT1_TOKEN = os.environ.get("BOT1_TOKEN")
 BOT2_TOKEN = os.environ.get("BOT2_TOKEN")
-ADMIN_ID = os.environ.get("ADMIN_ID")
+ADMIN_ID = str(os.environ.get("ADMIN_ID"))
 
 SEEN_USERS = set()
 
@@ -49,42 +49,61 @@ def delayed_followup(user_id):
 def webhook():
     data = request.json
 
-    if "message" not in data:
+    # поддержка всех типов сообщений
+    msg = data.get("message") or data.get("edited_message")
+    if not msg:
         return "ok"
 
-    msg = data["message"]
-    message_id = msg["message_id"]
-    chat_id = msg["chat"]["id"]
-
-    # 🔥 ПЕРЕСЫЛАЕМ ВСЁ (включая стикеры, фото, файлы)
-    forward_to_admin(chat_id, message_id)
+    message_id = msg.get("message_id")
+    chat_id = str(msg.get("chat", {}).get("id"))
 
     text = msg.get("text", "")
     from_user = msg.get("from", {})
-
     user_id = str(from_user.get("id"))
     username = from_user.get("username", "no_username")
 
-    # ЕСЛИ ПИШЕТ АДМИН (ответ)
-    if user_id == str(ADMIN_ID):
+    # -----------------------------
+    # ЕСЛИ ПИШЕТ АДМИН (ОТВЕТ)
+    # -----------------------------
+    if user_id == ADMIN_ID:
         if "reply_to_message" in msg:
-            original = msg["reply_to_message"].get("text", "")
-            if "[UID:" in original:
-                target_id = original.split("[UID:")[1].split("]")[0]
+            original = msg["reply_to_message"]
+
+            # 🔥 если ответ на пересланное сообщение
+            if "forward_from" in original:
+                target_id = str(original["forward_from"]["id"])
                 send_to_user(target_id, text)
+
+            # 🔥 если ответ на текст с UID
+            elif "text" in original and "[UID:" in original["text"]:
+                target_id = original["text"].split("[UID:")[1].split("]")[0]
+                send_to_user(target_id, text)
+
         return "ok"
 
+    # -----------------------------
+    # ПЕРЕСЫЛАЕМ ВСЁ ПОЛЬЗОВАТЕЛЯ ОДИН РАЗ
+    # -----------------------------
+    if chat_id != ADMIN_ID:
+        forward_to_admin(chat_id, message_id)
+
+    # -----------------------------
     # /start
+    # -----------------------------
     if text == "/start":
         send_to_user(user_id, WELCOME_TEXT)
         return "ok"
 
-    # текст дополнительно (чтобы UID был)
+    # -----------------------------
+    # ДОП. ТЕКСТ (UID)
+    # -----------------------------
     if text:
         formatted = f"👤 @{username} [UID:{user_id}]\n{text}"
         send_message(BOT2_TOKEN, ADMIN_ID, formatted)
 
-    # автоответ
+    # -----------------------------
+    # АВТООТВЕТ
+    # -----------------------------
     if user_id not in SEEN_USERS:
         SEEN_USERS.add(user_id)
         send_to_user(user_id, AUTO_REPLY_TEXT)
